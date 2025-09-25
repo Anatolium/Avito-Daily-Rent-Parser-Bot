@@ -1,0 +1,23 @@
+# Core dependencies
+curl-cffi
+playwright
+beautifulsoup4
+
+# Database
+SQLAlchemy
+alembic
+
+# Environment variables
+python-dotenv
+
+# Utilities
+pandas
+numpy
+tqdm
+
+# Testing
+pytest
+pytest-cov
+
+# Logging
+loguru
