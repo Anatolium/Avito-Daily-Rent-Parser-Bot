@@ -1,15 +1,12 @@
-# main.py
 import os
-import json
 import random
 import asyncio
 from typing import Dict, Optional
 from dotenv import load_dotenv
 from datetime import datetime
 import hashlib
-from avito_processor import AvitoProcessor, setup_avito_processor
 
-from playwright.async_api import async_playwright, BrowserContext, TimeoutError
+from playwright.async_api import async_playwright, TimeoutError
 
 # Импортируем кастомные заголовки из services
 from services.headers import CUSTOM_HEADERS
@@ -365,15 +362,41 @@ class AvitoParser:
 
         return saved_file_path  # Возвращаем путь к сохраненному файлу
 
+    # В классе AvitoParser
     async def parse_with_processor(self):
-        """Парсит страницу с использованием нового процессора"""
-        processor = setup_avito_processor()
+        """Парсит страницу и возвращает статистику"""
+        try:
+            from avito_processor import setup_avito_processor
+            processor = setup_avito_processor()
 
-        def processor_callback(html):
-            stats = processor.process_html(html, self.target_url)
-            print(f"✅ Обработка завершена. Новых объявлений: {stats['new_items']}")
+            # Переменная для статистики
+            parsing_stats = {}
 
-        await self.parse_target(callback=processor_callback)
+            def processor_callback(html):
+                stats = processor.process_html(html, self.target_url)
+                print(f"✅ Обработка завершена. Новых объявлений: {stats['new_items']}")
+                # Сохраняем статистику
+                parsing_stats.update(stats)
+
+            await self.parse_target(callback=processor_callback)
+
+            # Возвращаем статистику
+            return {
+                "status": "success",
+                "processed": parsing_stats.get('total_processed', 0),
+                "new_items": parsing_stats.get('new_items', 0),
+                "existing_items": parsing_stats.get('existing_items', 0),
+                "errors": parsing_stats.get('errors', 0)
+            }
+
+        except Exception as e:
+            print(f"❌ Ошибка в parse_with_processor: {e}")
+            return {
+                "status": "error",
+                "error": str(e),
+                "processed": 0,
+                "errors": 1
+            }
 
     async def close(self):
         """Закрывает сессию браузера."""
@@ -381,18 +404,43 @@ class AvitoParser:
 
 
 # Асинхронный main
+# main.py
 async def main():
-    print("🚀 Запуск улучшенного парсера Avito...")
-
-    parser = AvitoParser(headless=False)
+    """Главная функция парсинга"""
+    print("🚀 Запуск парсера Avito...")
 
     try:
+        from dotenv import load_dotenv
+        load_dotenv()
+
+        target_url = os.getenv('TARGET_URL')
+        if not target_url:
+            return {
+                "status": "error",
+                "error": "TARGET_URL не задан",
+                "processed": 0,
+                "errors": 1
+            }
+
+        parser = AvitoParser(headless=True)
         await parser.start()
-        await parser.parse_with_processor()  # Используем новый метод
+
+        # Запускаем парсинг и получаем результат
+        result = await parser.parse_with_processor()
+
+        await parser.close()
+
+        print("✅ Парсинг завершен")
+        return result  # Возвращаем статистику от парсера
+
     except Exception as e:
         print(f"❌ Ошибка: {e}")
-    finally:
-        await parser.close()
+        return {
+            "status": "error",
+            "error": str(e),
+            "processed": 0,
+            "errors": 1
+        }
 
 
 if __name__ == "__main__":

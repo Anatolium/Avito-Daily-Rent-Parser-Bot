@@ -1,0 +1,16 @@
+services:
+  avito-parser:
+    build: .
+    container_name: avito-parser
+    volumes:
+      # Монтируем директории для сохранения данных
+      - ./database:/app/database
+      - ./.env:/app/.env
+      - ./trash:/app/trash
+      # Монтируем cookie.json для сохранения сессии
+      - ./cookie.json:/app/cookie.json
+    environment:
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    # restart: unless-stopped

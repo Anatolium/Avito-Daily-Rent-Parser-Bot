@@ -21,7 +21,7 @@ class AvitoItem:
         self.desc = ""
         self.images = []
         self.link = ""
-        self.parsed_date = datetime.now()
+        # Убрали parsed_date
 
     def to_dict(self) -> Dict:
         """Преобразует объект в словарь"""
@@ -35,7 +35,7 @@ class AvitoItem:
             'desc': self.desc,
             'images': json.dumps(self.images, ensure_ascii=False),
             'link': self.link,
-            'parsed_date': self.parsed_date.isoformat()
+            # Убрали parsed_date
         }
 
     def __str__(self) -> str:
@@ -45,12 +45,17 @@ class AvitoItem:
 class AvitoDatabase:
     """Класс для работы с базой данных SQLite"""
 
-    def __init__(self, db_path: str = "avito_apartments.db"):
+    def __init__(self, db_path: str = "database/avito_apartments.db"):
+        # Создаем папку database если она не существует
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
         self.db_path = db_path
         self.init_database()
 
     def init_database(self):
         """Инициализирует базу данных и создает таблицы"""
+        # Убеждаемся, что папка существует
+        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
@@ -65,9 +70,8 @@ class AvitoDatabase:
                 address TEXT,
                 desc TEXT,
                 images TEXT,
-                link TEXT UNIQUE,
-                parsed_date DATETIME,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                link TEXT UNIQUE
+                -- Убрали parsed_date и created_at
             )
         ''')
 
@@ -82,17 +86,21 @@ class AvitoDatabase:
     def save_apartment(self, item: AvitoItem) -> bool:
         """Сохраняет объявление в базу данных"""
         try:
+            # Убеждаемся, что папка существует
+            os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
 
             cursor.execute('''
                 INSERT OR REPLACE INTO apartments 
-                (title, price, bail, tax, services, address, desc, images, link, parsed_date)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (title, price, bail, tax, services, address, desc, images, link)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 item.title, item.price, item.bail, item.tax, item.services,
                 item.address, item.desc, json.dumps(item.images, ensure_ascii=False),
-                item.link, item.parsed_date
+                item.link
+                # Убрали parsed_date
             ))
 
             conn.commit()
@@ -104,6 +112,9 @@ class AvitoDatabase:
 
     def apartment_exists(self, link: str) -> bool:
         """Проверяет, существует ли объявление с данной ссылкой"""
+        # Убеждаемся, что папка существует
+        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
@@ -408,7 +419,9 @@ class AvitoHTMLParser:
 class AvitoProcessor:
     """Основной класс процессора для обработки HTML Avito"""
 
-    def __init__(self, db_path: str = "avito_apartments.db"):
+    def __init__(self, db_path: str = "database/avito_apartments.db"):
+        # Создаем папку database если она не существует
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
         self.parser = AvitoHTMLParser()
         self.database = AvitoDatabase(db_path)
         self.stats = {
@@ -435,29 +448,16 @@ class AvitoProcessor:
                 self.stats['total_processed'] += 1
 
                 if not item.link:
-                    print("⚠ Объявление без ссылки, пропускаем")
                     self.stats['errors'] += 1
                     continue
 
-                # Выводим отладочную информацию
-                if output_to_console:
-                    print(f"\n📝 Обрабатываем объявление:")
-                    print(f"   Заголовок: {item.title}")
-                    print(f"   Адрес: '{item.address}'")
-                    print(f"   Изображений: {len(item.images)}")
-                    print(f"   Ссылка: {item.link}")
-
+                # Убрали отладочную информацию о каждом объявлении
                 if self.database.apartment_exists(item.link):
-                    if output_to_console:
-                        print(f"⏩ Объявление уже существует: {item.title}")
                     self.stats['existing_items'] += 1
                 else:
                     if self.database.save_apartment(item):
-                        if output_to_console:
-                            print(f"✅ Сохранено новое объявление: {item.title}")
                         self.stats['new_items'] += 1
                     else:
-                        print(f"❌ Ошибка сохранения: {item.title}")
                         self.stats['errors'] += 1
 
             # Выводим статистику
@@ -485,9 +485,9 @@ class AvitoProcessor:
         cursor = conn.cursor()
 
         cursor.execute('''
-            SELECT title, price, address, images, link, parsed_date 
+            SELECT title, price, address, images, link
             FROM apartments 
-            ORDER BY parsed_date DESC 
+            ORDER BY id DESC 
             LIMIT ?
         ''', (limit,))
 
@@ -499,8 +499,7 @@ class AvitoProcessor:
                 'price': row[1],
                 'address': row[2],
                 'images_count': len(images_data),
-                'link': row[4],
-                'parsed_date': row[5]
+                'link': row[4]
             })
 
         conn.close()
@@ -511,46 +510,3 @@ class AvitoProcessor:
 def setup_avito_processor():
     """Создает и настраивает процессор Avito"""
     return AvitoProcessor()
-
-# # Пример использования в основном коде
-# async def main_with_processor():
-#     """Пример использования нового процессора"""
-#     from main import AvitoParser  # Импортируем существующий парсер
-#
-#     parser = AvitoParser(headless=False)
-#     processor = setup_avito_processor()
-#
-#     try:
-#         await parser.start()
-#
-#         def processing_callback(html):
-#             """Callback для обработки HTML"""
-#             print("🎯 Начинаем обработку данных...")
-#             stats = processor.process_html(html, parser.target_url)
-#
-#             # Показываем последние объявления
-#             if stats['new_items'] > 0:
-#                 print("\n📋 ПОСЛЕДНИЕ ДОБАВЛЕННЫЕ ОБЪЯВЛЕНИЯ:")
-#                 recent_items = processor.get_recent_items(5)
-#                 for i, item in enumerate(recent_items, 1):
-#                     print(f"{i}. {item['title']}")
-#                     print(f"   💰 {item['price']}")
-#                     print(f"   📍 Адрес: {item['address']}")
-#                     print(f"   🖼️ Изображений: {item['images_count']}")
-#                     print(f"   🔗 {item['link']}")
-#                     print()
-#
-#         print("🔍 Запускаем парсинг страницы...")
-#         await parser.parse_target(callback=processing_callback)
-#
-#     except Exception as e:
-#         print(f"❌ Ошибка: {e}")
-#     finally:
-#         await parser.close()
-#
-#
-# if __name__ == "__main__":
-#     # Тестирование процессора
-#     import asyncio
-#
-#     asyncio.run(main_with_processor())
